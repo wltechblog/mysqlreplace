@@ -170,8 +170,9 @@ func getTextColumns(db *sql.DB, table string) ([]string, error) {
 		var typ string
 		var null string
 		var key string
+		var defaultVal interface{}
 		var extra string
-		if err := rows.Scan(&field, &typ, &null, &key, &extra); err != nil {
+		if err := rows.Scan(&field, &typ, &null, &key, &defaultVal, &extra); err != nil {
 			return nil, err
 		}
 
