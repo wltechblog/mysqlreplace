@@ -98,6 +98,17 @@ func getTables(db *sql.DB) ([]string, error) {
 	return tables, nil
 }
 
+func convertToString(value interface{}) string {
+	switch v := value.(type) {
+	case []byte:
+		return string(v)
+	case string:
+		return v
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
 func processTable(db *sql.DB, table, search, replace string, verbose bool) (int, error) {
 	columns, err := getTextColumns(db, table)
 	if err != nil {
@@ -144,7 +155,7 @@ func processTable(db *sql.DB, table, search, replace string, verbose bool) (int,
 			for i, colName := range columnsList {
 				if colName == col {
 					if values[i] != nil {
-						strValue := fmt.Sprintf("%v", values[i])
+						strValue := convertToString(values[i])
 						newValue := strings.ReplaceAll(strValue, search, replace)
 						if newValue != strValue {
 							if verbose {
@@ -154,6 +165,8 @@ func processTable(db *sql.DB, table, search, replace string, verbose bool) (int,
 							args = append(args, newValue)
 							hasChanges = true
 							totalReplacements++
+						} else if verbose && rowCount < 3 {
+							log.Printf("    No match in column %s: '%s' (searching for: '%s')", col, strValue, search)
 						}
 					}
 					break
