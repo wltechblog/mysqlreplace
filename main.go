@@ -108,15 +108,15 @@ func processTable(db *sql.DB, table, search, replace string) (int, error) {
 	}
 	defer rows.Close()
 
-	columnTypes, err := rows.ColumnTypes()
+	columnsList, err := rows.Columns()
 	if err != nil {
 		return 0, err
 	}
 
 	totalReplacements := 0
 	for rows.Next() {
-		values := make([]interface{}, len(columnTypes))
-		valuePtrs := make([]interface{}, len(columnTypes))
+		values := make([]interface{}, len(columnsList))
+		valuePtrs := make([]interface{}, len(columnsList))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
@@ -130,8 +130,8 @@ func processTable(db *sql.DB, table, search, replace string) (int, error) {
 		hasChanges := false
 
 		for _, col := range columns {
-			for i, ct := range columnTypes {
-				if ct.Name() == col {
+			for i, colName := range columnsList {
+				if colName == col {
 					if values[i] != nil {
 						strValue := fmt.Sprintf("%v", values[i])
 						newValue := strings.ReplaceAll(strValue, search, replace)
@@ -148,7 +148,7 @@ func processTable(db *sql.DB, table, search, replace string) (int, error) {
 		}
 
 		if hasChanges {
-			if err := updateRow(db, table, updates, args, columnTypes, values); err != nil {
+			if err := updateRow(db, table, updates, args, columnsList, values); err != nil {
 				return 0, err
 			}
 		}
@@ -187,13 +187,13 @@ func getTextColumns(db *sql.DB, table string) ([]string, error) {
 	return columns, nil
 }
 
-func updateRow(db *sql.DB, table string, updates []string, args []interface{}, columnTypes []*sql.ColumnType, values []interface{}) error {
+func updateRow(db *sql.DB, table string, updates []string, args []interface{}, columnsList []string, values []interface{}) error {
 	var whereClauses []string
 	var whereArgs []interface{}
 
-	for i, ct := range columnTypes {
+	for i, colName := range columnsList {
 		if values[i] != nil {
-			whereClauses = append(whereClauses, fmt.Sprintf("%s = ?", ct.Name()))
+			whereClauses = append(whereClauses, fmt.Sprintf("%s = ?", colName))
 			whereArgs = append(whereArgs, values[i])
 		}
 	}
