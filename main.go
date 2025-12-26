@@ -18,6 +18,7 @@ type Config struct {
 	Database string
 	Search   string
 	Replace  string
+	Verbose  bool
 }
 
 func main() {
@@ -34,15 +35,19 @@ func main() {
 		log.Fatalf("Failed to get tables: %v", err)
 	}
 
+	if config.Verbose {
+		log.Printf("Found %d tables to process", len(tables))
+	}
+
 	totalReplacements := 0
 	for _, table := range tables {
-		replacements, err := processTable(db, table, config.Search, config.Replace)
+		replacements, err := processTable(db, table, config.Search, config.Replace, config.Verbose)
 		if err != nil {
 			log.Printf("Error processing table %s: %v", table, err)
 			continue
 		}
 		totalReplacements += replacements
-		if replacements > 0 {
+		if replacements > 0 || config.Verbose {
 			log.Printf("Table %s: %d replacements", table, replacements)
 		}
 	}
@@ -59,6 +64,7 @@ func parseFlags() Config {
 	flag.StringVar(&config.Database, "database", "", "Database name")
 	flag.StringVar(&config.Search, "search", "", "String to search for")
 	flag.StringVar(&config.Replace, "replace", "", "String to replace with")
+	flag.BoolVar(&config.Verbose, "v", false, "Enable verbose output")
 	flag.Parse()
 
 	if config.User == "" || config.Database == "" || config.Search == "" {
@@ -92,10 +98,14 @@ func getTables(db *sql.DB) ([]string, error) {
 	return tables, nil
 }
 
-func processTable(db *sql.DB, table, search, replace string) (int, error) {
+func processTable(db *sql.DB, table, search, replace string, verbose bool) (int, error) {
 	columns, err := getTextColumns(db, table)
 	if err != nil {
 		return 0, err
+	}
+
+	if verbose {
+		log.Printf("  Table %s: found text columns: %v", table, columns)
 	}
 
 	if len(columns) == 0 {
@@ -114,6 +124,7 @@ func processTable(db *sql.DB, table, search, replace string) (int, error) {
 	}
 
 	totalReplacements := 0
+	rowCount := 0
 	for rows.Next() {
 		values := make([]interface{}, len(columnsList))
 		valuePtrs := make([]interface{}, len(columnsList))
@@ -136,6 +147,9 @@ func processTable(db *sql.DB, table, search, replace string) (int, error) {
 						strValue := fmt.Sprintf("%v", values[i])
 						newValue := strings.ReplaceAll(strValue, search, replace)
 						if newValue != strValue {
+							if verbose {
+								log.Printf("    Found match in column %s: '%s' -> '%s'", col, strValue, newValue)
+							}
 							updates = append(updates, fmt.Sprintf("%s = ?", col))
 							args = append(args, newValue)
 							hasChanges = true
@@ -152,6 +166,11 @@ func processTable(db *sql.DB, table, search, replace string) (int, error) {
 				return 0, err
 			}
 		}
+		rowCount++
+	}
+
+	if verbose {
+		log.Printf("  Processed %d rows in table %s", rowCount, table)
 	}
 
 	return totalReplacements, nil
